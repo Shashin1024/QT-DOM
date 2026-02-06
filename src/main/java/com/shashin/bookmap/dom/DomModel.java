@@ -1,16 +1,24 @@
 package com.shashin.bookmap.dom;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public class DomModel {
 
+    private final DomSettings settings;
+
+    public DomModel(DomSettings settings) {
+        this.settings = settings;
+        this.lastResetTime = System.currentTimeMillis();
+    }
+
     // --- DATA STRUCTURES ---
-    private final ConcurrentSkipListMap<Integer, Integer> bids = new ConcurrentSkipListMap<>((p1, p2) -> p2.compareTo(p1));
+    private final ConcurrentSkipListMap<Integer, Integer> bids = new ConcurrentSkipListMap<>(
+            (p1, p2) -> p2.compareTo(p1));
     private final ConcurrentSkipListMap<Integer, Integer> asks = new ConcurrentSkipListMap<>();
 
-    private final ConcurrentSkipListMap<Integer, Integer> bidReloads = new ConcurrentSkipListMap<>((p1, p2) -> p2.compareTo(p1));
+    private final ConcurrentSkipListMap<Integer, Integer> bidReloads = new ConcurrentSkipListMap<>(
+            (p1, p2) -> p2.compareTo(p1));
     private final ConcurrentSkipListMap<Integer, Integer> askReloads = new ConcurrentSkipListMap<>();
 
     private final ConcurrentSkipListMap<Integer, FootprintData> sessionFp = new ConcurrentSkipListMap<>();
@@ -21,11 +29,13 @@ public class DomModel {
     private volatile int globalVelocityVolume = 0; // Tracks the rolling sum
     private static final long VELOCITY_WINDOW_MS = 15 * 1000;
 
-    // NEW: Stores the Global Velocity value *at the time* a trade occurred at a specific price
+    // NEW: Stores the Global Velocity value *at the time* a trade occurred at a
+    // specific price
     private final ConcurrentSkipListMap<Integer, Integer> priceRecordedVelocity = new ConcurrentSkipListMap<>();
 
     private final ConcurrentLinkedDeque<TradeRecord> tradeHistory = new ConcurrentLinkedDeque<>();
-    private static final long ROLLING_WINDOW_MS = 5 * 60 * 1000;
+    // REMOVED ROLLING_WINDOW_MS
+    private volatile long lastResetTime;
 
     private static final int CLEANUP_DISTANCE = 15;
 
@@ -46,11 +56,15 @@ public class DomModel {
         // 1. Detect Stacking (+) or Pulling (-)
         boolean inRange = false;
         if (isBid) {
-            if (bestBid != Integer.MIN_VALUE && price >= (bestBid - 20)) inRange = true;
-            if (bestBid == Integer.MIN_VALUE) inRange = true;
+            if (bestBid != Integer.MIN_VALUE && price >= (bestBid - 20))
+                inRange = true;
+            if (bestBid == Integer.MIN_VALUE)
+                inRange = true;
         } else {
-            if (bestAsk != Integer.MAX_VALUE && price <= (bestAsk + 20)) inRange = true;
-            if (bestAsk == Integer.MAX_VALUE) inRange = true;
+            if (bestAsk != Integer.MAX_VALUE && price <= (bestAsk + 20))
+                inRange = true;
+            if (bestAsk == Integer.MAX_VALUE)
+                inRange = true;
         }
 
         if (delta != 0 && inRange) {
@@ -64,12 +78,16 @@ public class DomModel {
         // 2. Update Book & BBO
         if (newSize == 0) {
             book.remove(price);
-            if (isBid && price == bestBid) bestBid = bids.isEmpty() ? Integer.MIN_VALUE : bids.firstKey();
-            if (!isBid && price == bestAsk) bestAsk = asks.isEmpty() ? Integer.MAX_VALUE : asks.firstKey();
+            if (isBid && price == bestBid)
+                bestBid = bids.isEmpty() ? Integer.MIN_VALUE : bids.firstKey();
+            if (!isBid && price == bestAsk)
+                bestAsk = asks.isEmpty() ? Integer.MAX_VALUE : asks.firstKey();
         } else {
             book.put(price, newSize);
-            if (isBid && price > bestBid) bestBid = price;
-            if (!isBid && price < bestAsk) bestAsk = price;
+            if (isBid && price > bestBid)
+                bestBid = price;
+            if (!isBid && price < bestAsk)
+                bestAsk = price;
         }
     }
 
@@ -95,21 +113,16 @@ public class DomModel {
         // 3. STAMP the velocity at this price
         // We take the current global velocity and assign it to this price row
         priceRecordedVelocity.put(price, globalVelocityVolume);
+
+        checkAndPerformReset(now);
     }
 
-    public void pruneOldTrades(long now) {
-        while (!tradeHistory.isEmpty()) {
-            TradeRecord rec = tradeHistory.peek();
-            if (now - rec.timestamp > ROLLING_WINDOW_MS) {
-                tradeHistory.poll();
-                FootprintData data = rollingFp.get(rec.price);
-                if (data != null) {
-                    data.subtract(rec.isBuy, rec.size);
-                    if (data.isEmpty()) rollingFp.remove(rec.price);
-                }
-            } else {
-                break;
-            }
+    public void checkAndPerformReset(long now) {
+        long intervalMs = settings.footprintResetMinutes * 60 * 1000L;
+        if (now - lastResetTime >= intervalMs) {
+            rollingFp.clear();
+            tradeHistory.clear();
+            lastResetTime = now;
         }
     }
 
@@ -147,6 +160,7 @@ public class DomModel {
     public DomSnapshot getSnapshot() {
         long now = System.currentTimeMillis();
         pruneOutdatedReloads();
+        checkAndPerformReset(now); // Ensure we reset even if no trades come in
         pruneVelocity(now);
 
         return new DomSnapshot(
@@ -154,8 +168,7 @@ public class DomModel {
                 bidReloads.clone(), askReloads.clone(),
                 deepCopy(sessionFp), deepCopy(rollingFp),
                 priceRecordedVelocity.clone(), // <--- Pass the map instead of the int
-                lastTradePrice, lastTradeSize, bestBid, bestAsk
-        );
+                lastTradePrice, lastTradeSize, bestBid, bestAsk);
     }
 
     private ConcurrentSkipListMap<Integer, FootprintData> deepCopy(ConcurrentSkipListMap<Integer, FootprintData> src) {
@@ -170,24 +183,41 @@ public class DomModel {
         public volatile int askCnt = 0;
         public volatile int bidCnt = 0;
 
-        public FootprintData() {}
+        public FootprintData() {
+        }
+
         public FootprintData(FootprintData other) {
-            this.askVol = other.askVol; this.bidVol = other.bidVol;
-            this.askCnt = other.askCnt; this.bidCnt = other.bidCnt;
+            this.askVol = other.askVol;
+            this.bidVol = other.bidVol;
+            this.askCnt = other.askCnt;
+            this.bidCnt = other.bidCnt;
         }
 
         public void add(boolean isBuy, int size) {
-            if (isBuy) { askVol += size; askCnt++; }
-            else       { bidVol += size; bidCnt++; }
+            if (isBuy) {
+                askVol += size;
+                askCnt++;
+            } else {
+                bidVol += size;
+                bidCnt++;
+            }
         }
 
         public void subtract(boolean isBuy, int size) {
-            if (isBuy) { askVol -= size; askCnt--; }
-            else       { bidVol -= size; bidCnt--; }
+            if (isBuy) {
+                askVol -= size;
+                askCnt--;
+            } else {
+                bidVol -= size;
+                bidCnt--;
+            }
         }
 
-        public boolean isEmpty() { return askVol <= 0 && bidVol <= 0 && askCnt <= 0 && bidCnt <= 0; }
+        public boolean isEmpty() {
+            return askVol <= 0 && bidVol <= 0 && askCnt <= 0 && bidCnt <= 0;
+        }
     }
 
-    private record TradeRecord(long timestamp, int price, int size, boolean isBuy) {}
+    private record TradeRecord(long timestamp, int price, int size, boolean isBuy) {
+    }
 }
