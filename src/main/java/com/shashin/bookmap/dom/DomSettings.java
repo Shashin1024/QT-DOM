@@ -34,13 +34,22 @@ public class DomSettings {
     public java.awt.Color colTextOnBar = java.awt.Color.WHITE;
     public java.awt.Color colTextHighlight = java.awt.Color.YELLOW;
 
-    public java.awt.Color colFpBid = new java.awt.Color(100, 200, 255);
-    public java.awt.Color colFpAsk = new java.awt.Color(255, 100, 100);
+    public java.awt.Color colFpBid = new java.awt.Color(255, 100, 100);
+    public java.awt.Color colFpAsk = new java.awt.Color(100, 200, 255);
     public java.awt.Color colFpX = new java.awt.Color(100, 100, 100);
     public java.awt.Color colTextTrdCount = new java.awt.Color(220, 220, 220);
+    public java.awt.Color colVolumeBar = new java.awt.Color(50, 70, 90);
+    public java.awt.Color colVolumeText = new java.awt.Color(180, 190, 200);
+    public java.awt.Color colDeltaPos = new java.awt.Color(0, 180, 80);
+    public java.awt.Color colDeltaNeg = new java.awt.Color(200, 50, 50);
 
     public java.awt.Color colVelocityText = new java.awt.Color(255, 0, 220);
 
     public java.awt.Color colReloadPos = new java.awt.Color(0, 255, 100);
     public java.awt.Color colReloadNeg = new java.awt.Color(255, 50, 50);
+
+    // --- ICEBERG DETECTION ---
+    public boolean icebergDetectionEnabled = true;
+    public int minIcebergChunkSize = 10;
+    public java.awt.Color colIcebergDot = new java.awt.Color(0, 255, 255); // Aqua
 }

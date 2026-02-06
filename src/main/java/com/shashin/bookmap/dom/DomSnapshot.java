@@ -10,7 +10,9 @@ public record DomSnapshot(
         ConcurrentSkipListMap<Integer, Integer> askReloads,
         ConcurrentSkipListMap<Integer, DomModel.FootprintData> sessionFp,
         ConcurrentSkipListMap<Integer, DomModel.FootprintData> rollingFp,
-        ConcurrentSkipListMap<Integer, Integer> priceRecordedVelocity, // <--- UPDATED: Map for per-price velocity
+        ConcurrentSkipListMap<Integer, Integer> priceRecordedVelocity,
+        ConcurrentSkipListMap<Integer, Integer> bidIcebergChunks,
+        ConcurrentSkipListMap<Integer, Integer> askIcebergChunks,
         int lastTradePrice,
         int lastTradeSize,
         int bestBid,

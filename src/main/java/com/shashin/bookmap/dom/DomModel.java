@@ -21,6 +21,11 @@ public class DomModel {
             (p1, p2) -> p2.compareTo(p1));
     private final ConcurrentSkipListMap<Integer, Integer> askReloads = new ConcurrentSkipListMap<>();
 
+    // --- ICEBERG CHUNK DETECTION ---
+    private final ConcurrentSkipListMap<Integer, Integer> bidIcebergChunks = new ConcurrentSkipListMap<>(
+            (p1, p2) -> p2.compareTo(p1));
+    private final ConcurrentSkipListMap<Integer, Integer> askIcebergChunks = new ConcurrentSkipListMap<>();
+
     private final ConcurrentSkipListMap<Integer, FootprintData> sessionFp = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Integer, FootprintData> rollingFp = new ConcurrentSkipListMap<>();
 
@@ -78,6 +83,7 @@ public class DomModel {
         // 2. Update Book & BBO
         if (newSize == 0) {
             book.remove(price);
+            (isBid ? bidIcebergChunks : askIcebergChunks).remove(price);
             if (isBid && price == bestBid)
                 bestBid = bids.isEmpty() ? Integer.MIN_VALUE : bids.firstKey();
             if (!isBid && price == bestAsk)
@@ -88,6 +94,16 @@ public class DomModel {
                 bestBid = price;
             if (!isBid && price < bestAsk)
                 bestAsk = price;
+
+            // 3. Iceberg detection: flag levels where total size >= threshold
+            if (settings.icebergDetectionEnabled) {
+                var chunkMap = isBid ? bidIcebergChunks : askIcebergChunks;
+                if (newSize >= settings.minIcebergChunkSize) {
+                    chunkMap.put(price, newSize);
+                } else {
+                    chunkMap.remove(price);
+                }
+            }
         }
     }
 
@@ -95,7 +111,7 @@ public class DomModel {
         lastTradePrice = price;
         lastTradeSize = size;
         long now = System.currentTimeMillis();
-        boolean isBuy = !isBidAggressor;
+        boolean isBuy = isBidAggressor;
 
         // Standard Footprint Logic
         sessionFp.computeIfAbsent(price, k -> new FootprintData()).add(isBuy, size);
@@ -144,16 +160,20 @@ public class DomModel {
     private void pruneOutdatedReloads() {
         if (bestBid == Integer.MIN_VALUE || bids.isEmpty()) {
             bidReloads.clear();
+            bidIcebergChunks.clear();
         } else {
             int minAllowed = bestBid - CLEANUP_DISTANCE;
             bidReloads.keySet().removeIf(price -> price < minAllowed || price > bestBid);
+            bidIcebergChunks.keySet().removeIf(price -> price < minAllowed || price > bestBid);
         }
 
         if (bestAsk == Integer.MAX_VALUE || asks.isEmpty()) {
             askReloads.clear();
+            askIcebergChunks.clear();
         } else {
             int maxAllowed = bestAsk + CLEANUP_DISTANCE;
             askReloads.keySet().removeIf(price -> price > maxAllowed || price < bestAsk);
+            askIcebergChunks.keySet().removeIf(price -> price > maxAllowed || price < bestAsk);
         }
     }
 
@@ -167,7 +187,8 @@ public class DomModel {
                 bids.clone(), asks.clone(),
                 bidReloads.clone(), askReloads.clone(),
                 deepCopy(sessionFp), deepCopy(rollingFp),
-                priceRecordedVelocity.clone(), // <--- Pass the map instead of the int
+                priceRecordedVelocity.clone(),
+                bidIcebergChunks.clone(), askIcebergChunks.clone(),
                 lastTradePrice, lastTradeSize, bestBid, bestAsk);
     }
 

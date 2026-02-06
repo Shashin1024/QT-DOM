@@ -107,6 +107,14 @@ public class DomSettingsPanel extends JPanel {
                 new Color(100, 100, 100), c -> settings.colFpX = c));
         fpColors.addRow(createColorRow("Trade Count Delta", settings.colTextTrdCount,
                 new Color(220, 220, 220), c -> settings.colTextTrdCount = c));
+        fpColors.addRow(createColorRow("Volume Histogram Bar", settings.colVolumeBar,
+                new Color(50, 70, 90), c -> settings.colVolumeBar = c));
+        fpColors.addRow(createColorRow("Volume Text", settings.colVolumeText,
+                new Color(180, 190, 200), c -> settings.colVolumeText = c));
+        fpColors.addRow(createColorRow("Delta Positive", settings.colDeltaPos,
+                new Color(0, 180, 80), c -> settings.colDeltaPos = c));
+        fpColors.addRow(createColorRow("Delta Negative", settings.colDeltaNeg,
+                new Color(200, 50, 50), c -> settings.colDeltaNeg = c));
         add(fpColors);
         add(Box.createVerticalStrut(4));
 
@@ -119,6 +127,17 @@ public class DomSettingsPanel extends JPanel {
         indicatorColors.addRow(createColorRow("Negative Reload", settings.colReloadNeg,
                 new Color(255, 50, 50), c -> settings.colReloadNeg = c));
         add(indicatorColors);
+        add(Box.createVerticalStrut(4));
+
+        // --- Iceberg Detection ---
+        CollapsibleSection icebergSection = new CollapsibleSection("Iceberg Detection");
+        icebergSection.addRow(createCheckboxRow("Enable Iceberg Detection", settings.icebergDetectionEnabled,
+                v -> settings.icebergDetectionEnabled = v));
+        icebergSection.addRow(createSpinnerRow("Min Chunk Size", settings.minIcebergChunkSize, 1, 500, 1,
+                v -> settings.minIcebergChunkSize = v));
+        icebergSection.addRow(createColorRow("Iceberg Dot Color", settings.colIcebergDot,
+                new Color(0, 255, 255), c -> settings.colIcebergDot = c));
+        add(icebergSection);
 
         // Bottom glue
         add(Box.createVerticalGlue());
