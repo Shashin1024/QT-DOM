@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseWheelEvent;
 
 public class JigsawDomPanel extends JPanel {
     private final DomSettings settings;
@@ -280,8 +279,6 @@ public class JigsawDomPanel extends JPanel {
 
     private void drawReloadIfRelevant(Graphics2D g2, Integer val, int price, int bestPrice, boolean isBid, int x, int y,
             int w, int h) {
-        if (val == null || val == 0)
-            return;
         boolean isRelevant = false;
         if (isBid && bestPrice != Integer.MIN_VALUE) {
             if (price <= bestPrice && price >= (bestPrice - 10))
@@ -292,7 +289,7 @@ public class JigsawDomPanel extends JPanel {
         }
 
         if (isRelevant) {
-            drawReloadCell(g2, val, x, y, w, h);
+            drawReloadCell(g2, val != null ? val : 0, x, y, w, h);
         }
     }
 
@@ -306,11 +303,11 @@ public class JigsawDomPanel extends JPanel {
 
         drawHeaderString(g2, "Price", x1, wPrice);
         drawHeaderString(g2, "Vel", xVel, wVel);
-        drawHeaderString(g2, "B-Rld", x2, wReload);
+        drawHeaderString(g2, "B S/P", x2, wReload);
         drawHeaderString(g2, "Bid", x3, wQty);
         drawHeaderString(g2, "5m Vol", x4, wFP_5m);
         drawHeaderString(g2, "Ask", x5, wQty);
-        drawHeaderString(g2, "A-Rld", x6, wReload);
+        drawHeaderString(g2, "A S/P", x6, wReload);
         drawHeaderString(g2, "5m Trd", x7, wFP_Trd);
         drawHeaderString(g2, "Volume", x8, wFP_Vol);
         drawHeaderString(g2, "Delta", x9, wDelta);
@@ -324,8 +321,15 @@ public class JigsawDomPanel extends JPanel {
         }
 
         g2.setColor(settings.colPriceText);
-        String priceStr = (pips < 1) ? String.format("%.2f", price * pips) : String.valueOf(price);
-        drawCenteredString(g2, priceStr, x, y, w, h);
+        drawCenteredString(g2, formatPrice(price), x, y, w, h);
+    }
+
+    private String formatPrice(int price) {
+        if (pips >= 1.0) return String.valueOf(price);
+        // Compute decimal places needed to represent one tick, minimum 2 to preserve
+        // trailing zeros (e.g. Gold 5214.30 rather than 5214.3).
+        int dp = Math.min(6, Math.max(2, (int) Math.ceil(-Math.log10(pips))));
+        return String.format("%." + dp + "f", price * pips);
     }
 
     private void drawIcebergDot(Graphics2D g2, int x, int y, int cellWidth, int cellHeight, boolean isLeftSide) {
@@ -338,7 +342,8 @@ public class JigsawDomPanel extends JPanel {
 
     private void drawReloadCell(Graphics2D g2, int val, int x, int y, int w, int h) {
         String text = (val > 0 ? "+" : "") + val;
-        g2.setColor(val > 0 ? settings.colReloadPos : settings.colReloadNeg);
+        Color color = val > 0 ? settings.colReloadPos : val < 0 ? settings.colReloadNeg : Color.GRAY;
+        g2.setColor(color);
         drawCenteredString(g2, text, x, y, w, h);
     }
 
@@ -422,27 +427,17 @@ public class JigsawDomPanel extends JPanel {
         if (total <= 0)
             return;
 
-        // 1. Histogram bar background (grows from left)
+        // Histogram bar (grows from left)
         double ratio = (double) total / maxVolume;
         int barWidth = (int) (w * ratio);
         g.setColor(settings.colVolumeBar);
         g.fillRect(x, y, barWidth, h);
 
-        // 2. Footprint text (bidVol x askVol) right-aligned on top
-        String sAsk = String.valueOf(fp.askVol);
-        String sBid = String.valueOf(fp.bidVol);
-        String xStr = " x ";
-        String text = sBid + xStr + sAsk;
-
+        // Total volume number, right-aligned
+        String text = String.valueOf(total);
         FontMetrics fm = g.getFontMetrics();
         int textY = y + (h / 2) + (fm.getAscent() / 2) - 1;
-        int startX = x + w - fm.stringWidth(text) - 4; // right-aligned with 4px padding
-
-        g.setColor(settings.colFpBid);
-        g.drawString(sBid, startX, textY);
-        g.setColor(settings.colFpX);
-        g.drawString(xStr, startX + fm.stringWidth(sBid), textY);
-        g.setColor(settings.colFpAsk);
-        g.drawString(sAsk, startX + fm.stringWidth(sBid) + fm.stringWidth(xStr), textY);
+        g.setColor(settings.colVolumeText);
+        g.drawString(text, x + w - fm.stringWidth(text) - 4, textY);
     }
 }

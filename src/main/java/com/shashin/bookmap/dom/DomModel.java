@@ -72,7 +72,7 @@ public class DomModel {
                 inRange = true;
         }
 
-        if (delta != 0 && inRange) {
+        if (delta != 0 && inRange && oldSize > 0) {
             reloadMap.compute(price, (k, v) -> {
                 int current = (v == null) ? 0 : v;
                 int result = current + delta;
@@ -129,6 +129,16 @@ public class DomModel {
         // 3. STAMP the velocity at this price
         // We take the current global velocity and assign it to this price row
         priceRecordedVelocity.put(price, globalVelocityVolume);
+
+        // Retroactively correct: the passive side's depth reduction was already counted
+        // as pulling by onDepth, but it was an execution — not a cancellation.
+        // isBidAggressor=true means a buy hit the ask, so correct askReloads.
+        var reloadMap = isBidAggressor ? askReloads : bidReloads;
+        reloadMap.compute(price, (k, v) -> {
+            if (v == null) return null;
+            int corrected = v + size;
+            return (corrected == 0) ? null : corrected;
+        });
 
         checkAndPerformReset(now);
     }
